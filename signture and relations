@@ -1,0 +1,116 @@
+#Extract Signature section and Relations section 
+
+import re
+import selenium
+
+base_details="return document.querySelector('file-view').shadowRoot.querySelector('vt-ui-file-details').shadowRoot.querySelector('div.masonry')."
+base_relations="return document.querySelector('file-view').shadowRoot.querySelector('vt-ui-file-relations').shadowRoot.querySelectorAll('vt-ui-expandable')[0].querySelector('vt-ui-file-list').shadowRoot.querySelector('table')."
+
+
+#Signature
+def details_sig(url: str, driver):
+    driver.get(url)
+    base_sig = "return document.querySelector('file-view').shadowRoot.querySelector('vt-ui-file-details').shadowRoot.querySelector('vt-ui-signature-info').shadowRoot.querySelectorAll('vt-ui-expandable-entry')"
+    size = len(driver.execute_script(
+        "return document.querySelector('file-view').shadowRoot.querySelector('vt-ui-file-details').shadowRoot.querySelector('vt-ui-signature-info').shadowRoot.querySelectorAll('vt-ui-expandable-entry')"))
+    numOfX509Signers = len(driver.execute_script(base_sig + "[4].querySelectorAll('vt-ui-expandable-detail')"))
+    numOfCounterSigners = len(driver.execute_script(base_sig + "[3].querySelectorAll('vt-ui-expandable-detail')"))
+    numOfSigners = len(driver.execute_script(base_sig + "[2].querySelectorAll('vt-ui-expandable-detail')"))
+    sizes_of_signers = [0, 0, numOfSigners, numOfCounterSigners, numOfX509Signers]
+
+    headers = []
+    for i in range(size):
+        headers.append(driver.execute_script(
+            f"return document.querySelector('file-view').shadowRoot.querySelector('vt-ui-file-details').shadowRoot.querySelector('vt-ui-signature-info').shadowRoot.querySelectorAll('vt-ui-expandable-entry')[{str(i)}].shadowRoot.querySelector('section>h4')").get_attribute(
+            'textContent'))
+    # verification
+    signInfo = ''
+    signInfo = signInfo + '\n' + (
+        driver.execute_script(base_sig + "[0].shadowRoot.querySelector('h4')").get_attribute('textContent'))
+    signInfo = signInfo + (driver.execute_script(base_sig + "[0]").get_attribute('textContent'))
+
+    # file version info
+    signInfo = signInfo + '\n' + (
+        driver.execute_script(base_sig + "[1].shadowRoot.querySelector('h4')").get_attribute('textContent'))
+    for i in range(len(driver.execute_script(
+            base_sig + "[1].querySelector('span').querySelector('vt-ui-key-val-table').shadowRoot.querySelector('div.properties').querySelector('div.property-list').querySelectorAll('div.row')"))):
+        signInfo = signInfo + (driver.execute_script(
+            base_sig + "[1].querySelector('span').querySelector('vt-ui-key-val-table').shadowRoot.querySelector('div.properties').querySelector('div.property-list').querySelectorAll('div.row')[" + str(
+                i) + "].querySelector('div.value')").get_attribute('textContent'))
+
+    for i in range(2, 5):
+        if sizes_of_signers[i] > 0:
+            signInfo = signInfo + '\n' + (headers[i])
+            for size in range(sizes_of_signers[i]):
+                f_size = len(driver.execute_script(
+                    base_sig + f"[{str(i)}].querySelectorAll('vt-ui-expandable-detail')[{str(size)}].querySelector('span').querySelector('vt-ui-key-val-table').shadowRoot.querySelector('div.properties').querySelector('div.property-list').querySelectorAll('div.row')"))
+                signInfo = (signInfo + '\t').replace('        	', '	')
+                signInfo = signInfo + (driver.execute_script(
+                    base_sig + f"[{str(i)}].querySelector('span').querySelectorAll('vt-ui-expandable-detail')[{str(size)}].shadowRoot.querySelector('slot')").text)
+                for j in range(f_size):
+                    signInfo = signInfo + (driver.execute_script(
+                        base_sig + f"[{str(i)}].querySelectorAll('vt-ui-expandable-detail')[{str(size)}].querySelector('span').querySelector('vt-ui-key-val-table').shadowRoot.querySelector('div.properties').querySelector('div.property-list').querySelectorAll('div.row')[" + str(
+                            j) + "].querySelector('div.value')").get_attribute('textContent'))
+    return signInfo.replace('\n          ', '').replace('Name', '\n\t\tName').replace('Copyright','\n\t\tCopyright').replace('Signers', 'Signers\n').replace('Original \n\t\tName','Original Name').replace('Internal \n\t\tName','Internal Name')
+
+#Relations
+def relations(url: str, driver):
+    driver.get(url)
+    titles=[]
+    relations=''
+    numOfSections = len(driver.execute_script("return document.querySelector('file-view').shadowRoot.querySelector('vt-ui-file-relations').shadowRoot.querySelectorAll('vt-ui-expandable')"))
+    for i in range(numOfSections):
+        titles.append(driver.execute_script(f"return document.querySelector('file-view').shadowRoot.querySelector('vt-ui-file-relations').shadowRoot.querySelectorAll('vt-ui-expandable')[{str(i)}].shadowRoot.querySelector('div.header>h3')").get_attribute('textContent'))
+    # keep pressing buttons until all expanded
+    for i in range(len(titles) - 1):
+        relations = relations + str(titles[i])
+        if 'Execution Parents' in titles[i] or 'PE Resource Parents' in titles[i]:
+            done = 0
+            button_hidden = driver.execute_script(
+                "return document.querySelector('file-view').shadowRoot.querySelector('vt-ui-file-relations').shadowRoot.querySelectorAll('vt-ui-expandable')[" + str(
+                    i) + "].querySelector('vt-ui-button').hidden")
+            if button_hidden == True:
+                done = 1
+            while done == 0:
+                driver.execute_script(
+                    "return document.querySelector('file-view').shadowRoot.querySelector('vt-ui-file-relations').shadowRoot.querySelectorAll('vt-ui-expandable')[" + str(
+                        i) + "].querySelector('vt-ui-button').click()")
+                button_hidden = driver.execute_script(
+                    "return document.querySelector('file-view').shadowRoot.querySelector('vt-ui-file-relations').shadowRoot.querySelectorAll('vt-ui-expandable')[" + str(
+                        i) + "].querySelector('vt-ui-button').hidden")
+                if button_hidden == True:
+                    done=1
+                    break
+        elif 'PE Resource Children' in titles[i]:
+            done = 0
+            button_hidden = driver.execute_script(
+                "return document.querySelector('file-view').shadowRoot.querySelector('vt-ui-file-relations').shadowRoot.querySelectorAll('vt-ui-expandable')[" + str(
+                    i) + "].querySelector('vt-ui-button').hidden")
+            if button_hidden == True:
+                done = 1
+            while done == 0:
+                driver.execute_script(
+                    "return document.querySelector('file-view').shadowRoot.querySelector('vt-ui-file-relations').shadowRoot.querySelectorAll('vt-ui-expandable')[" + str(
+                        i) + "].querySelector('vt-ui-button').click()")
+                
+                button_hidden = driver.execute_script(
+                    "return document.querySelector('file-view').shadowRoot.querySelector('vt-ui-file-relations').shadowRoot.querySelectorAll('vt-ui-expandable')[" + str(
+                        i) + "].querySelector('vt-ui-button').hidden")
+                if button_hidden == True:
+                    done = 1
+                    break
+            numOfChildren = len(driver.execute_script(
+                "return document.querySelector('file-view').shadowRoot.querySelector('vt-ui-file-relations').shadowRoot.querySelectorAll('vt-ui-expandable')[" + str(
+                    i) + "].querySelector('vt-ui-file-list-expandable-row').shadowRoot.querySelectorAll('vt-ui-expandable-detail')"))
+            for j in range(numOfChildren):
+                driver.execute_script(
+                    "return document.querySelector('file-view').shadowRoot.querySelector('vt-ui-file-relations').shadowRoot.querySelectorAll('vt-ui-expandable')["+str(i)+"].querySelector('vt-ui-file-list-expandable-row').shadowRoot.querySelectorAll('vt-ui-expandable-detail')[" + str(
+                        j) + "].shadowRoot.querySelector('#labelWrapper').querySelector('vt-ui-button').click()")
+        root_r = driver.find_element_by_xpath("/html/body/vt-ui-shell")
+        everything_relations = str(root_r.text)
+        temp = (re.sub('.*?' + str(titles[i]), '', everything_relations, flags=re.DOTALL))
+        relations = relations + (temp.split(str(titles[i + 1]), 1)[0]).replace('\n/', ' /').replace('Scanned\n','Scanned\t\t').replace(
+            'Detections\n', 'Detections\t').replace('File type\n', 'File type\t') + '\n'
+    if 'Graph Summary' in relations:
+        relations = relations.split('Graph Summary')[0]
+    return(relations)
